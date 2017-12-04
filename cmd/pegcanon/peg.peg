@@ -1,0 +1,98 @@
+# PE Grammar for removing peg parser comments, declaration header, and <> directives from peg files.
+# This grammar should match the peg grammar after processing.
+
+package main
+
+type PegHide Peg { *hideExtents }
+
+# Hierarchical syntax
+Grammar		<- Spacing < 'package' MustSpacing Identifier
+			   Import*
+                           'type' MustSpacing Identifier
+                           'Peg'> { p.hide(begin, end, text) } Spacing Action
+                           Definition+ EndOfFile
+
+Import		<- 'import' Spacing ["] < [a-zA-Z_/.\-]+ > ["] Spacing 
+
+Definition	<- Identifier LeftArrow Expression &(Identifier LeftArrow / !.)
+Expression	<- Sequence (Slash Sequence)* (Slash)?
+		 / { }
+Sequence	<- Prefix (Prefix)*
+Prefix		<- And Action
+		 / Not Action
+		 / And Suffix
+		 / Not Suffix
+		 /     Suffix
+Suffix          <- Primary (Question
+                           / Star
+                           / Plus
+                           )?
+Primary	        <- Identifier !LeftArrow
+                 / Open Expression Close
+                 / Literal
+                 / Class
+                 / Dot
+                 / Action
+                 / Begin Expression End
+
+Identifier	<- < IdentStart IdentCont* > Spacing
+IdentStart	<- [[a-z_]]
+IdentCont	<- IdentStart / [0-9]
+Literal		<- ['] (!['] Char)? (!['] Char 
+                                    )* ['] Spacing
+		 / ["] (!["] DoubleChar)? (!["] DoubleChar
+                                          )* ["] Spacing
+Class		<- ( '[[' ( '^' DoubleRanges / DoubleRanges )?
+                     ']]'
+                   / '[' ( '^' Ranges / Ranges )?
+                     ']' )
+                   Spacing
+Ranges		<- !']' Range (!']' Range)*
+DoubleRanges	<- !']]' DoubleRange (!']]' DoubleRange)*
+Range		<- Char '-' Char
+                 / Char
+DoubleRange	<- Char '-' Char
+                 / DoubleChar
+Char            <- Escape
+                 / !'\\' <.>
+DoubleChar	<- Escape
+		 / <[a-zA-Z]>
+                 / !'\\' <.>
+Escape          <- "\\a"
+                 / "\\b"
+                 / "\\e"
+                 / "\\f"
+                 / "\\n"
+                 / "\\r"
+                 / "\\t"
+                 / "\\v"
+                 / "\\'"
+                 / '\\"'
+                 / '\\['
+                 / '\\]'
+                 / '\\-'
+                 / '\\' "0x"<[0-9a-fA-F]+>
+                 / '\\' <[0-3][0-7][0-7]>
+                 / '\\' <[0-7][0-7]?>
+                 / '\\\\'
+LeftArrow	<- ('<-' / '\0x2190') Spacing
+Slash		<- '/' Spacing
+And		<- '&' Spacing
+Not		<- '!' Spacing
+Question	<- '?' Spacing
+Star		<- '*' Spacing
+Plus		<- '+' Spacing
+Open		<- '(' Spacing
+Close		<- ')' Spacing
+Dot		<- '.' Spacing
+SpaceComment	<- (Space / Comment)
+Spacing		<- <SpaceComment*> { p.hide(begin, end, text); }
+MustSpacing	<- SpaceComment+
+Comment		<- '#' (!EndOfLine .)* EndOfLine
+Space		<- ' ' / '\t' / EndOfLine
+EndOfLine	<- '\r\n' / '\n' / '\r'
+EndOfFile	<- !.
+Action		<- < '{' ActionBody* '}' > { p.hide(begin, end, text) }  Spacing
+ActionBody	<- [^{}] / '{' ActionBody* '}'
+Begin		<- <'<' Spacing> { p.hide(begin, end, text) } 
+End		<- <'>' Spacing> { p.hide(begin, end, text) } 
