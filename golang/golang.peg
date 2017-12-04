@@ -1,0 +1,527 @@
+# PE Grammer for golang adapted from the EBNF in https://golang.org/ref/spec
+
+package golang
+
+type Grammar Peg {}
+
+Grammar <- SourceFile
+
+# Characters
+# newline = /* the Unicode code point U+000A */ .
+newline <- '\n'
+# unicode_char   = /* an arbitrary Unicode code point except newline */ .
+unicode_char <- _utf16/(![\n].)
+_utf16 <- [\0x0080-\0xff00]
+# unicode_letter = /* a Unicode code point classified as "Letter" */ .
+# XXX: wrong
+unicode_letter <- [a-zA-Z]/_utf16
+# unicode_digit  = /* a Unicode code point classified as "Number, decimal digit" */ .
+# XXX: wrong
+unicode_digit <- [0-9]
+
+# Letters and digits
+# letter        = unicode_letter | "_" .
+letter <- unicode_letter / '_'
+# decimal_digit = "0" ... "9" .
+decimal_digit <- [0-9]
+# octal_digit   = "0" ... "7" .
+octal_digit <- [0-7]
+# hex_digit     = "0" ... "9" | "A" ... "F" | "a" ... "f" .
+hex_digit <- [0-9A-Fa-f]
+
+# Comments
+Comment <- LineComment / GeneralComment
+# Line comments start with the character sequence // and stop at the end of the line. 
+LineComment <- '//' (!_eol .)*
+_eol <- [\r\n] / !.
+# General comments start with the character sequence /* and stop with the first subsequent character sequence */. 
+GeneralComment <- '/*' (![*]. / '*'![/])* '*/'
+
+# Tokens
+# Whitespace
+_ws <- [ \t\r\n]
+_s <- (_ws/Comment)*
+_sl <- ([ \t]/Comment)*
+_ms <- (_ws/Comment)+
+
+# Identifiers
+# identifier = letter { letter | unicode_digit } .
+identifier <- !_reserved letter ( letter / unicode_digit)*
+_reserved <- ('break' / 'case' / 'chan' / 'continue' / 'default' / 'func' / 'if' / 'return' / 'switch' / 'type' / 'interface' / 'struct' / 'map') !(letter/unicode_digit)
+
+# Integer literals
+# int_lit     = decimal_lit | octal_lit | hex_lit .
+int_lit <- decimal_lit / hex_lit / octal_lit
+# decimal_lit = ( "1" ... "9" ) { decimal_digit } .
+decimal_lit <- [1-9](decimal_digit)*
+# octal_lit   = "0" { octal_digit } .
+octal_lit <- '0' octal_digit*
+# hex_lit     = "0" ( "x" | "X" ) hex_digit { hex_digit } .
+hex_lit <- '0' [xX] hex_digit+
+
+# Floating-point literals
+# float_lit = decimals "." [ decimals ] [ exponent ] |
+#		decimals exponent |
+#		"." decimals [ exponent ] .
+float_lit <- decimals '.' decimals? exponent? / decimals exponent / '.' decimals exponent?
+# decimals  = decimal_digit { decimal_digit } .
+decimals <- decimal_digit+
+# exponent  = ( "e" | "E" ) [ "+" | "-" ] decimals .
+exponent <- [eE] ('+'/'-')? decimals
+
+# Imaginary literals
+# imaginary_lit = (decimals | float_lit) "i" .
+imaginary_lit <- (float_lit / decimals) 'i'
+
+# Rune literals
+# rune_lit         = "'" ( unicode_value | byte_value ) "'" .
+rune_lit <- "'" (byte_value / unicode_value) "'"
+# unicode_value    = unicode_char | little_u_value | big_u_value | escaped_char .
+unicode_value <- escaped_char / little_u_value / big_u_value /unicode_char
+# byte_value       = octal_byte_value | hex_byte_value .
+byte_value <- octal_byte_value / hex_byte_value
+# octal_byte_value = `\` octal_digit octal_digit octal_digit .
+octal_byte_value <- '\\' octal_digit octal_digit octal_digit
+#hex_byte_value   = `\` "x" hex_digit hex_digit .
+hex_byte_value <- '\\x' hex_digit hex_digit
+#little_u_value   = `\` "u" hex_digit hex_digit hex_digit hex_digit .
+little_u_value <- '\\u' hex_digit hex_digit hex_digit hex_digit
+#big_u_value      = `\` "U" hex_digit hex_digit hex_digit hex_digit
+#                           hex_digit hex_digit hex_digit hex_digit .
+big_u_value <- '\\U' hex_digit hex_digit hex_digit hex_digit
+                     hex_digit hex_digit hex_digit hex_digit
+# escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `"` ) .
+escaped_char <- '\\' [abfnrtv\\'"]
+
+
+# String literals
+# string_lit             = raw_string_lit | interpreted_string_lit .
+string_lit <- raw_string_lit / interpreted_string_lit
+# raw_string_lit         = "`" { unicode_char | newline } "`" .
+# XXX: had to add !'`' since this rule doesn't know when to stop
+raw_string_lit <- "`" (!'`' unicode_char / newline )* "`"
+# interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
+# XXX: had to add !'"' since this rule doesn't know when to stop
+interpreted_string_lit <- '"' (!'"' (unicode_value / byte_value))* '"'
+
+# Types
+# Type      = TypeName | TypeLit | "(" Type ")" .
+Type <- TypeLit / TypeName / (_tok_lparen Type ')')
+# TypeName  = identifier | QualifiedIdent .
+TypeName <- QualifiedIdent / identifier
+# TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
+#	    SliceType | MapType | ChannelType .
+# XXX: improved to match on keywords before identifiers
+TypeLit <- StructType / FunctionType / InterfaceType / MapType / ChannelType
+	   / SliceType / ArrayType /PointerType
+
+
+# Array types
+# ArrayType   = "[" ArrayLength "]" ElementType .
+ArrayType <- '[' ArrayLength ']' ElementType
+# ArrayLength = Expression .
+ArrayLength <- Expression
+# ElementType = Type .
+ElementType <- Type
+
+# Slice types
+# SliceType = "[" "]" ElementType .
+SliceType <- '[' ']' ElementType
+
+# Struct types
+# StructType    = "struct" "{" { FieldDecl ";" } "}" .
+#StructType <- _tok_struct _tok_lcurl (FieldDecl _sl _tok_semi)* '}'
+# XXX: this is crazy but necessary for one-liner 'type s struct { SomeType }'
+StructType <- 'struct' _sl  _tok_lcurl _fd_list _s '}'
+_fd_list <- ( FieldDecl _sl _tok_semi )* (FieldDecl _s)?
+# FieldDecl     = (IdentifierList Type | EmbeddedField) [ Tag ] .
+FieldDecl <- ((IdentifierList [ \t]* Type) / EmbeddedField) _sl Tag?
+# EmbeddedField = [ "*" ] TypeName .
+EmbeddedField <- '*'? TypeName
+# Tag           = string_lit .
+Tag <- string_lit
+
+# Pointer types
+# PointerType = "*" BaseType .
+PointerType <- '*' BaseType
+# BaseType    = Type .
+BaseType <- Type
+
+# Function types
+# FunctionType   = "func" Signature .
+FunctionType <- _tok_func Signature
+# Signature      = Parameters [ Result ] .
+Signature <- Parameters [ ]* Result?
+# Result         = Parameters | Type .
+Result <- Parameters / Type
+# Parameters     = "(" [ ParameterList [ "," ] ] ")" .
+Parameters <- _tok_lparen (ParameterList _tok_comma?)? ')'
+# ParameterList  = ParameterDecl { "," ParameterDecl } .
+ParameterList <- ParameterDecl _s (_tok_comma ParameterDecl _s)*
+# ParameterDecl  = [ IdentifierList ] [ "..." ] Type .
+# ParameterDecl <- _s (IdentifierList _s)? ('...' _s)? Type
+ParameterDecl <- ((IdentifierList _s ('...' _s)? Type) / (('...' _s)? Type))
+
+# Interface types
+# InterfaceType      = "interface" "{" { MethodSpec ";" } "}" .
+InterfaceType <- 'interface' _s _tok_lcurl ( MethodSpec _sl _tok_semi )* '}'
+# MethodSpec         = MethodName Signature | InterfaceTypeName .
+MethodSpec <- MethodName Signature / InterfaceTypeName
+# MethodName         = identifier .
+MethodName  <- identifier
+# InterfaceTypeName  = TypeName .
+InterfaceTypeName <- TypeName
+
+# Map types
+# MapType     = "map" "[" KeyType "]" ElementType .
+MapType <- 'map' _s '[' KeyType ']' _sl ElementType
+# KeyType     = Type .
+KeyType <- Type
+
+# Channel types
+# ChannelType = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
+ChannelType <- ((_tok_chan _tok_larrow)/(_tok_larrow _tok_chan)/_tok_chan) ElementType
+
+# Blocks
+# Block = "{" StatementList "}" .
+Block <- _tok_lcurl StatementList '}'
+# StatementList = { Statement ";" } .
+# XXX: This didn't work
+# StatementList <- ( Statement _tok_semi )*
+# XXX: this is crazy but necessary for one-liner 'if x { a = b }'
+StatementList <- (( Statement _sl _tok_semi )* (Statement _sl _tok_semi?))?
+
+# Declarations and scope
+# Declaration   = ConstDecl | TypeDecl | VarDecl .
+Declaration <- ConstDecl / TypeDecl / VarDecl
+# TopLevelDecl  = Declaration | FunctionDecl | MethodDecl .
+TopLevelDecl <- Declaration / FunctionDecl / MethodDecl
+
+# Constant declarations
+# ConstDecl      = "const" ( ConstSpec | "(" { ConstSpec ";" } ")" ) .
+ConstDecl <- 'const' _ms ( ConstSpec / (_tok_lparen (ConstSpec _sl _tok_semi)* ")" ))
+# ConstSpec      = IdentifierList [ [ Type ] "=" ExpressionList ] .
+ConstSpec <- IdentifierList ((_s Type)? _s _tok_eq ExpressionList)?
+# IdentifierList = identifier { "," identifier } .
+IdentifierList <- identifier (_s _tok_comma identifier )*
+# ExpressionList = Expression { "," Expression } .
+ExpressionList <- Expression (_s _tok_comma Expression )* 
+
+# Type declarations
+# TypeDecl = "type" ( TypeSpec | "(" { TypeSpec ";" } ")" ) .
+TypeDecl <- 'type' _ms ( TypeSpec / (_tok_lparen ( TypeSpec _sl _tok_semi )* ')' ))
+# TypeSpec = AliasDecl | TypeDef .
+TypeSpec <- AliasDecl / TypeDef
+
+# Alias declarations
+# AliasDecl = identifier "=" Type .
+AliasDecl <- identifier _s _tok_eq Type
+
+# Type definitions
+# TypeDef = identifier Type .
+TypeDef <- identifier _ms Type
+
+# Variable declarations
+# VarDecl     = "var" ( VarSpec | "(" { VarSpec ";" } ")" ) .
+VarDecl <- 'var' _ms ( VarSpec / (_tok_lparen ( VarSpec _tok_semi )* ')') )
+# VarSpec     = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
+VarSpec <- IdentifierList _s ( (Type (_s _tok_eq ExpressionList )?) / (_tok_eq ExpressionList) ) _sl
+
+# Short variable declarations
+# ShortVarDecl = IdentifierList ":=" ExpressionList .
+ShortVarDecl <- IdentifierList _s _tok_assign ExpressionList
+
+# Function declarations
+# FunctionDecl = "func" FunctionName ( Function | Signature ) .
+FunctionDecl <- _tok_func FunctionName _sl ( Function / Signature )
+# FunctionName = identifier .
+FunctionName <- identifier
+# Function     = Signature FunctionBody .
+Function <- Signature _s FunctionBody
+# FunctionBody = Block .
+FunctionBody <- Block
+
+# Method declarations
+# MethodDecl = "func" Receiver MethodName ( Function | Signature ) .
+MethodDecl <- _tok_func Receiver _s MethodName _sl ( Function / Signature )
+# Receiver   = Parameters .
+Receiver <- Parameters
+
+# Operands
+# Operand     = Literal | OperandName | MethodExpr | "(" Expression ")" .
+Operand <- Literal / MethodExpr /  OperandName / _tok_lparen Expression _s ')'
+# Literal     = BasicLit | CompositeLit | FunctionLit .
+Literal <- FunctionLit / BasicLit / CompositeLit
+# BasicLit    = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
+BasicLit <- imaginary_lit / float_lit / int_lit / rune_lit / string_lit
+# OperandName = identifier | QualifiedIdent.
+OperandName <- identifier / QualifiedIdent
+
+# Qualified identifier
+# QualifiedIdent = PackageName "." identifier .
+QualifiedIdent <- PackageName "." identifier
+
+# Composite literals
+# CompositeLit  = LiteralType LiteralValue .
+CompositeLit <- LiteralType LiteralValue
+# LiteralType   = StructType | ArrayType | "[" "..." "]" ElementType |
+#                 SliceType | MapType | TypeName .
+LiteralType <- StructType / MapType /
+		'[...]' ElementType / SliceType / ArrayType /
+		TypeName
+# LiteralValue  = "{" [ ElementList [ "," ] ] "}" .
+LiteralValue <- _tok_lcurl ( ElementList _sl _tok_comma? )? _s '}'
+# ElementList   = KeyedElement { "," KeyedElement } .
+ElementList <- KeyedElement (_sl _tok_comma KeyedElement )*
+# KeyedElement  = [ Key ":" ] Element .
+KeyedElement  <- ( Key _sl _tok_colon)? Element
+# Key           = FieldName | Expression | LiteralValue .
+Key <- (FieldName _key_la) / (Expression _key_la) / (LiteralValue _key_la)
+_key_la <- &([ ]*':')
+# FieldName     = identifier .
+FieldName <- identifier 
+# Element       = Expression | LiteralValue .
+Element <- Expression / LiteralValue
+
+# Function literals
+# FunctionLit = "func" Function .
+FunctionLit <- _tok_func Function
+
+# Primary expressions
+# PrimaryExpr =
+# 	Operand |
+# 	Conversion |
+# 	PrimaryExpr Selector |
+# 	PrimaryExpr Index |
+# 	PrimaryExpr Slice |
+# 	PrimaryExpr TypeAssertion |
+# 	PrimaryExpr Arguments .
+# XXX: left recursive rule
+# PrimaryExpr <-
+#	Operand /
+#	Conversion /
+#	PrimaryExpr (
+#		Selector /
+#		Index /
+#		Slice /
+#		TypeAssertion /
+#		Arguments)
+# => PrimaryExpr <- (Operand/Conversion) PrimaryExprP
+# XXX: support 'make/new()' explicitly so make/new(map[string]Node) works
+PrimaryExpr <- (_builtin_func/Operand/Conversion) PrimaryExprP
+_builtin_func <- ('new'/'make') _sl '(' Type ((_tok_comma Expression _s) (_tok_comma Expression _s)?)? ')'
+PrimaryExprP <- ((Selector / Index / Slice / TypeAssertion / Arguments) PrimaryExprP)?
+# Selector       = "." identifier .
+Selector <- '.' _s identifier
+# Index          = "[" Expression "]" .
+Index <- '[' Expression ']'
+# Slice          = "[" [ Expression ] ":" [ Expression ] "]" |
+#                  "[" [ Expression ] ":" Expression ":" Expression "]" .
+Slice <- (_tok_lbrack (Expression _s)? _tok_colon (Expression _s)? ']') /
+         (_tok_lbrack (Expression _s)? _tok_colon Expression _s _tok_colon Expression _s ']')
+# TypeAssertion  = "." "(" Type ")" .
+TypeAssertion <- '.' '(' Type ')'
+# Arguments      = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
+Arguments <- _tok_lparen (( ExpressionList / (Type (_tok_comma ExpressionList)?) ) _s "..."? ","?)? _s ')'
+
+# Method expressions
+# MethodExpr    = ReceiverType "." MethodName .
+MethodExpr <- ReceiverType '.' _s MethodName
+# ReceiverType  = TypeName | "(" "*" TypeName ")" | "(" ReceiverType ")" .
+ReceiverType <- TypeName / '(' '*' TypeName ')' / '(' ReceiverType ')'
+
+# Operators
+# Expression = UnaryExpr | Expression binary_op Expression .
+# XXX: left recursive rule
+# Expression <- UnaryExpr / Expression binary_op Expression
+Expression <- UnaryExpr ExpressionP
+ExpressionP <- (_sl (binary_op _s Expression) ExpressionP)?
+# UnaryExpr  = PrimaryExpr | unary_op UnaryExpr .
+UnaryExpr <- PrimaryExpr / (unary_op _sl UnaryExpr)
+# 
+# binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
+binary_op <- '||' / '&&' / rel_op / add_op / mul_op
+# rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
+rel_op <-  '==' / '!=' / '<=' / '>=' / ('<' !'<') / ('>' !'>')
+# add_op     = "+" | "-" | "|" | "^" .
+add_op <- ('+' !'+') / ('-' !'-') / '|' / '^'
+# mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
+mul_op <- '*' / '/' / '%' / '<<' / '>>' / '&^' / ('&' !'&')
+# unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
+unary_op <- ('+' !'+') / ('-' !'-') / '!' / '^' / '*' / ('&' !'&') / _tok_larrow
+
+# Conversions
+# Conversion = Type "(" Expression [ "," ] ")" .
+Conversion <- Type '(' _s Expression _tok_comma? ')'
+
+# Statements
+# Statement =
+#	Declaration | LabeledStmt | SimpleStmt |
+#	GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt |
+#	FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt |
+#	DeferStmt .
+# XXX: Start with statements prefixed with keywords to avoid parsing as declaractions.
+Statement <-
+	Block / IfStmt / SwitchStmt / SelectStmt / ForStmt 
+	/ FallthroughStmt / GoStmt / ReturnStmt
+	/ BreakStmt / ContinueStmt / GotoStmt /  DeferStmt
+	/ Declaration / LabeledStmt / SimpleStmt
+# SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
+# XXX: moved EmptyStmt to last evaluation, increased incdec priority
+SimpleStmt <- IncDecStmt / ShortVarDecl / Assignment / SendStmt / ExpressionStmt / EmptyStmt
+
+# Empty statements
+# EmptyStmt = .
+EmptyStmt <- ()?
+
+# Labeled statements
+# LabeledStmt = Label ":" Statement .
+LabeledStmt <- Label ':'[ ]* (Statement/_sl)
+# Label       = identifier .
+Label <- identifier
+
+# Expression statements
+# ExpressionStmt = Expression .
+ExpressionStmt <- Expression
+
+# Send statements
+# SendStmt = Channel "<-" Expression .
+SendStmt <- Channel _sl _tok_larrow Expression
+# Channel  = Expression .
+Channel <- Expression
+
+# IncDec statements
+# IncDecStmt = Expression ( "++" | "--" ) .
+IncDecStmt <- Expression ( '++' / '--' )
+
+# Assignments
+# Assignment = ExpressionList assign_op ExpressionList .
+Assignment <- ExpressionList _s assign_op ExpressionList
+# assign_op = [ add_op | mul_op ] "=" .
+assign_op <- (add_op / mul_op)? _tok_eq
+
+# If statements
+# IfStmt = "if" [ SimpleStmt ";" ] Expression Block [ "else" ( IfStmt | Block ) ] .
+IfStmt <- _tok_if ( SimpleStmt _tok_semi )? Expression _s Block (_s 'else' _s ( IfStmt / Block ) )?
+
+# Switch statements
+# SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
+SwitchStmt <- ExprSwitchStmt / TypeSwitchStmt
+
+# Expression switches
+# ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] "{" { ExprCaseClause } "}" .
+ExprSwitchStmt <- _tok_switch (SimpleStmt _tok_semi)? (Expression _s)? _tok_lcurl (ExprCaseClause _s)* '}'
+# ExprCaseClause = ExprSwitchCase ":" StatementList .
+ExprCaseClause <- ExprSwitchCase _sl _tok_colon StatementList
+# ExprSwitchCase = "case" ExpressionList | "default" .
+ExprSwitchCase <- (_tok_case ExpressionList) / _tok_default
+
+# Type switches
+# TypeSwitchStmt  = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
+TypeSwitchStmt  <- _tok_switch ( SimpleStmt _sl _tok_semi)? TypeSwitchGuard _sl _tok_lcurl TypeCaseClause* '}'
+# TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
+# TypeSwitchGuard <- (identifier _sl _tok_assign)? PrimaryExpr '.(type)'
+TypeSwitchGuard <-  (identifier _sl _tok_assign)? PrimaryExpr '.(type)'
+# TypeCaseClause  = TypeSwitchCase ":" StatementList .
+TypeCaseClause  <- TypeSwitchCase _tok_colon StatementList
+# TypeSwitchCase  = "case" TypeList | "default" .
+TypeSwitchCase  <- (_tok_case TypeList) / _tok_default
+# TypeList        = Type { "," Type } .
+TypeList <- Type ( _tok_comma Type )*
+
+# For statements with single condition
+# ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
+# XXX: had to rearrange this so that 'c:=0' doesn't give expression 'c'
+ForStmt <- 'for' _ms (ForClause / RangeClause / Condition)? _s Block
+# Condition = Expression .
+Condition <- Expression
+
+# For statements with for clause
+# ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
+ForClause <- InitStmt? _sl _tok_semi Condition? _sl _tok_semi PostStmt?
+# InitStmt = SimpleStmt .
+InitStmt <- SimpleStmt
+# PostStmt = SimpleStmt .
+PostStmt <- SimpleStmt
+
+# For statements with range clause
+# RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
+RangeClause <- ((ExpressionList _s _tok_eq) / (IdentifierList _s _tok_assign))? 'range' _ms Expression
+
+#  Go statements
+# GoStmt = "go" Expression .
+GoStmt <- 'go' _ms Expression
+
+# Select statements
+# SelectStmt = "select" "{" { CommClause } "}" .
+SelectStmt <- 'select' _s _tok_lcurl (CommClause _s)* '}'
+# CommClause = CommCase ":" StatementList .
+CommClause <- CommCase _tok_colon StatementList
+# CommCase   = "case" ( SendStmt | RecvStmt ) | "default" .
+CommCase <- _tok_case ( SendStmt / RecvStmt ) / _tok_default
+# RecvStmt   = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
+RecvStmt <- ((ExpressionList _sl _tok_eq) / (IdentifierList _sl _tok_assign))? RecvExpr
+# RecvExpr   = Expression .
+RecvExpr <- Expression
+
+# Return statements
+# ReturnStmt = "return" [ ExpressionList ] .
+ReturnStmt <- 'return' &(_ms/';') (_sl ExpressionList)?
+
+# Break statements
+# BreakStmt = "break" [ Label ] .
+BreakStmt <- 'break' &(_ms/';') (_sl Label)?
+
+# Continue statements
+# ContinueStmt = "continue" [ Label ] .
+ContinueStmt <- 'continue' &(_ms/';') (_sl Label)?
+
+# Goto statements
+# GotoStmt = "goto" Label .
+GotoStmt <- 'goto'_ms Label
+
+# Fallthrough statements
+# FallthroughStmt = "fallthrough" .
+FallthroughStmt <- 'fallthrough' _s
+
+# Defer statements
+# DeferStmt = "defer" Expression .
+DeferStmt <- 'defer' _ms Expression
+
+# Source file organization
+# SourceFile       = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
+SourceFile <- _s PackageClause _sl _tok_semi (ImportDecl _sl _tok_semi)* (TopLevelDecl _sl _tok_semi)* !.
+
+# Package clause
+# PackageClause  = "package" PackageName .
+PackageClause <- 'package' _ms PackageName
+# PackageName    = identifier .
+PackageName <- identifier
+
+# Import declarations
+# ImportDecl       = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
+# XXX: ')' instead of _tok_rparen; the _tok_semi needs whitespace
+ImportDecl <- 'import' _ms ( ImportSpec / (_tok_lparen (ImportSpec _sl _tok_semi)* ')') )
+# ImportSpec       = [ "." | PackageName ] ImportPath .
+# XXX I don't know why '.' is accepted; I've only seen '_'
+ImportSpec <- (([._] / PackageName) _sl)? ImportPath
+# ImportPath       = string_lit .
+ImportPath <- string_lit
+
+# "tokens" necessary to consume whitespace here and there; go
+# spec docs assume whitespace already removed.
+_tok_assign <- ':=' _s
+_tok_case <- 'case' _s
+_tok_chan <- 'chan' _s
+_tok_colon <- ':' _s
+_tok_comma <- ',' _s
+_tok_default <- 'default' _s
+_tok_eq <- '=' _s
+_tok_func <- 'func' _s
+_tok_if <- 'if' _s
+_tok_larrow <- '<-' _s
+_tok_lbrack <- '[' _s
+_tok_lcurl <- '{' _s
+_tok_lparen <- '(' _s
+_tok_semi <- ([\n\r';']/!.) _s
+_tok_switch <- 'switch' _s

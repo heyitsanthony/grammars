@@ -1,0 +1,69 @@
+package rfc1459
+
+type Grammar Peg {}
+
+# IRC protocol message according to RFC1459 S2.3.1.
+#
+# XXX: This grammar doesn't work because the way SPACE is defined.
+# Consider the command "WHO 0\r\n". message -> command params <crlf>
+# 	command -> WHO
+#	params -> SPACE middle params
+#	since params must have a space, the grammar expects two spaces in the command.
+#
+# <message>  ::= [':' <prefix> <SPACE> ] <command> <params> <crlf>
+message <- (':' prefix SPACE)? command params crlf
+# <prefix>   ::= <servername> | <nick> [ '!' <user> ] [ '@' <host> ]
+prefix <- servername / nick ('!' user)? ('@' host)?
+# <command>  ::= <letter> { <letter> } | <number> <number> <number>
+command <- letter+ / number number number
+# <SPACE>    ::= ' ' { ' ' }
+SPACE <- ' '+
+# <params>   ::= <SPACE> [ ':' <trailing> | <middle> <params> ]
+params <- SPACE (':' trailing / middle params )?
+# <middle>   ::= <Any *non-empty* sequence of octets not including SPACE
+#                 or NUL or CR or LF, the first of which may not be ':'>
+middle <- ![:] (![ \n\r\0] .)+
+# <trailing> ::= <Any, possibly *empty*, sequence of octets not including
+#                 NUL or CR or LF>
+trailing <- (![\0\n\r] .)*
+# <crlf>     ::= CR LF
+crlf <- "\r\n"
+
+# <target>     ::= <to> [ "," <target> ]
+target <- to (',' target)?
+# <to>         ::= <channel> | <user> '@' <servername> | <nick> | <mask>
+to <- channel / user '@' servername / nick / mask
+# <channel>    ::= ('#' | '&') <chstring>
+channel <- [#&] chstring
+# <servername> ::= <host>
+servername <- host
+# <host>       ::= see RFC 952 [DNS:4] for details on allowed hostnames
+host <- hname
+# <nick>       ::= <letter> { <letter> | <number> | <special> }
+nick <- letter (letter / number / special)*
+# <mask>       ::= ('#' | '$') <chstring>
+mask <- [#$] chstring
+# <chstring>   ::= <any 8bit code except SPACE, BELL, NUL, CR, LF and comma (',')>
+chstring <- (![ \b\0\r\n,] .)+
+
+# <user>       ::= <nonwhite> { <nonwhite> }
+user <- nonwhite+
+# <letter>     ::= 'a' ... 'z' | 'A' ... 'Z'
+letter <- [a-zA-Z]
+# <number>     ::= '0' ... '9'
+number <- [0-9]
+# <special>    ::= '-' | '[' | ']' | '\' | '`' | '^' | '{' | '}'
+special <- '-' / '[' / ']' / '\\' / '`' / '^' / '{' / '}'
+# <nonwhite>   ::= <any 8bit code except SPACE (0x20), NUL (0x0), CR (0xd), and LF (0xa)>
+nonwhite <- (![ \0\r\n] .)
+
+
+# RFC 952, lexical grammar.
+#
+# <hname> ::= <name>*["."<name>]
+hname <- name ("." name)*
+# <name>  ::= <let>[*[<let-or-digit-or-hyphen>]<let-or-digit>]
+name <- let ((let/digit/'-')*(let/digit))*
+# guessing about what's allowed here since not in RFC itself...
+let <- [a-zA-Z]
+digit  <- [0-9]

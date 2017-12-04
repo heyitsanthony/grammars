@@ -1,0 +1,115 @@
+# PE Grammar for PE Grammars
+#
+# Copied from github.com/pointlander/peg
+#
+# Adapted from [1] by Ian Piumarta <first-name at last-name point com>.
+#
+# Best viewed using 140 columns monospaced with tabs every 8.
+#
+# [1] Bryan Ford.  "Parsing Expression Grammars: A Recognition-Based Syntactic
+#     Foundation."  Symposium on Principles of Programming Languages,
+#     January 14--16, 2004, Venice, Italy.
+
+package peg
+
+# parser declaration
+
+type Grammar Peg {}
+
+# Hierarchical syntax
+Grammar		<- Spacing 'package' MustSpacing Identifier
+			   Import*
+                           'type' MustSpacing Identifier
+                           'Peg' Spacing Action
+                           Definition+ EndOfFile
+
+Import		<- 'import' Spacing ["] < [a-zA-Z_/.\-]+ > ["] Spacing
+
+Definition	<- Identifier
+		     LeftArrow Expression 	&(Identifier LeftArrow / !.)
+Expression	<- Sequence (Slash Sequence
+			    )* (Slash
+                               )?
+                 / {}
+Sequence	<- Prefix (Prefix )*
+Prefix		<- And Action 
+		 / Not Action
+		 / And Suffix
+		 / Not Suffix
+		 /     Suffix
+Suffix          <- Primary (Question
+                           / Star
+                           / Plus
+                           )?
+Primary	        <- Identifier !LeftArrow
+                 / Open Expression Close
+                 / Literal
+                 / Class
+                 / Dot
+                 / Action
+                 / Begin Expression End
+
+# Lexical syntax
+
+#PrivateIdentifier <- < [a-z_] IdentCont* > Spacing
+Identifier	<- < IdentStart IdentCont* > Spacing
+IdentStart	<- [[a-z_]]
+IdentCont	<- IdentStart / [0-9]
+Literal		<- ['] (!['] Char)? (!['] Char )* ['] Spacing
+		 / ["] (!["] DoubleChar)? (!["] DoubleChar 
+                                          )* ["] Spacing
+Class		<- ( '[[' ( '^' DoubleRanges / DoubleRanges )?
+                     ']]'
+                   / '[' ( '^' Ranges / Ranges )?
+                     ']' )
+                   Spacing
+Ranges		<- !']' Range (!']' Range )*
+DoubleRanges	<- !']]' DoubleRange (!']]' DoubleRange)*
+Range		<- Char '-' Char
+                 / Char
+DoubleRange	<- Char '-' Char
+                 / DoubleChar
+Char            <- Escape
+                 / !'\\' <.>
+DoubleChar	<- Escape
+		 / <[a-zA-Z]>
+                 / !'\\' <.>
+Escape          <- "\\a"
+                 / "\\b"
+                 / "\\e"
+                 / "\\f"
+                 / "\\n"
+                 / "\\r"
+                 / "\\t"
+                 / "\\v"
+                 / "\\'"
+                 / '\\"'
+                 / '\\['
+                 / '\\]'
+                 / '\\-'
+                 / '\\' "0x"<[0-9a-fA-F]+>
+                 / '\\' <[0-3][0-7][0-7]>
+                 / '\\' <[0-7][0-7]?>
+                 / '\\\\'
+LeftArrow	<- ('<-' / '\0x2190') Spacing
+Slash		<- '/' Spacing
+And		<- '&' Spacing
+Not		<- '!' Spacing
+Question	<- '?' Spacing
+Star		<- '*' Spacing
+Plus		<- '+' Spacing
+Open		<- '(' Spacing
+Close		<- ')' Spacing
+Dot		<- '.' Spacing
+SpaceComment	<- (Space / Comment)
+Spacing		<- SpaceComment*
+MustSpacing	<- SpaceComment+
+Comment		<- '#' (!EndOfLine .)* EndOfLine
+Space		<- ' ' / '\t' / EndOfLine
+EndOfLine	<- '\r\n' / '\n' / '\r'
+EndOfFile	<- !.
+Action		<- '{' < ActionBody* > '}' Spacing
+ActionBody	<- [^{}] / '{' ActionBody* '}'
+Begin		<- '<' Spacing
+End		<- '>' Spacing
+
