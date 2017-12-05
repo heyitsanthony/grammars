@@ -1,0 +1,62 @@
+# An example of off-side rule parsing using semantic actions.
+#
+# Parses an indented language like:
+# x
+#     y
+#     z
+#         1
+#         		2
+#         	3
+#         4
+#     w
+#
+# into a hierarchical "blocked" structure like:
+# x{y,z,{1,{{2},3},4},w}
+package offside
+
+type Grammar Peg {
+	depth int
+	in int
+	lastDepth int
+}
+
+offside <-	newline*
+		(	!{ _assert(p.lastDepth == 0, "enter top level last") }
+			!{ _assert(p.depth == 0, "enter top level depth") }
+			block
+			!{ _assert(p.lastDepth == 0, "exit top level last") }
+			!{ _assert(p.depth == 0, "exit top level depth") }
+			newline*)*
+		eof
+
+# backtracking on the indents may be pricey
+block	<- (	(!eof match_eq element !{p.depth = 0 } newline*)
+		/ (match_inc
+			!{ p.lastDepth++ }
+			(block / !{p.depth = 0; p.lastDepth--} return)
+			!{ p.lastDepth-- }))+
+
+match_read <-  indent !{ p.depth++; p.in++ }
+match_return <- !{ p.depth -= p.in} return
+
+# match indents to >last depth, consuming last+1 tokens exactly
+match_inc <-	!{ p.in = 0 }
+		(&{ p.depth <= p.lastDepth } match_read)*
+		&{ p.depth == p.lastDepth + 1}
+	   /	match_return
+# matches and consumes indents to last depth exactly
+match_eq	<- !indent &{ p.depth == p.lastDepth }
+		 / !{ p.in = 0 }
+		   (&{ p.depth <= p.lastDepth } match_read)*
+		   &{ p.depth == p.lastDepth }
+		 / match_return
+
+element <- !indent <line> eol
+# rejecting spaces rejects most languages, otherwise matches all text
+line <- <(!(newline/' ') .)*> &eol
+
+indent <- '\t'/'    '
+newline <- '\r\n'/[\n\r]
+eof <- !.
+eol <- newline/eof
+return <- !(./!.)
