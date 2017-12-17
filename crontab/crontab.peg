@@ -1,0 +1,33 @@
+package crontab
+
+type Grammar Peg {}
+
+crontab  <- ('\n'/comment/job/def)* !.
+job <-	minute spacing
+	hour spacing
+	day_month spacing
+	month spacing
+	day_week spacing
+	user spacing
+	cmd
+
+minute <- num_set
+hour <- num_set
+day_month <- num_set
+month <- num_set
+day_week <- num_set
+user <- ident
+
+num_set <- num_wild / (num_range/num) (',' (num_range/num))*
+# '/' is vixie-cron extension
+num_wild <- '*' ('/' num)?
+num_range <- num '-' num
+num <- [0-9]+
+
+def <- var '=' cmd
+var <- ident
+cmd <- (!'\n'.)*
+ident <- [a-zA-Z][a-zA-Z0-9]*
+
+comment <- '#' (!'\n'.)*
+spacing <- [ \t]+

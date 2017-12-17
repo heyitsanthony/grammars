@@ -1,3 +1,4 @@
+//go:generate peg crontab/crontab.peg
 //go:generate peg golang/golang.peg
 //go:generate peg offside/offside.peg
 //go:generate peg peg/peg.peg
@@ -14,6 +15,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/heyitsanthony/grammars/crontab"
 	"github.com/heyitsanthony/grammars/golang"
 	"github.com/heyitsanthony/grammars/offside"
 	"github.com/heyitsanthony/grammars/peg"
@@ -34,6 +36,7 @@ type g interface {
 	PrintSyntaxTree()
 }
 
+func newCrontab(s string) g { return &crontab.Grammar{Buffer: s, Pretty: true} }
 func newGo(s string) g      { return &golang.Grammar{Buffer: s, Pretty: true} }
 func newOffside(s string) g { return &offside.Grammar{Buffer: s, Pretty: true} }
 func newPeg(s string) g     { return &peg.Grammar{Buffer: s, Pretty: true} }
@@ -43,6 +46,7 @@ func newRFC1459(s string) g { return &rfc1459.Grammar{Buffer: s, Pretty: true} }
 func newRFC2812(s string) g { return &rfc2812.Grammar{Buffer: s, Pretty: true} }
 
 var grammars = map[string](func(string) g){
+	"crontab": newCrontab,
 	"go":      newGo,
 	"offside": newOffside,
 	"peg":     newPeg,
