@@ -1,0 +1,27 @@
+# Adapted from "Linux Programmer's Manual" group(5)
+# group - user group file
+package group
+
+type Grammar Peg {}
+
+group <- (entry '\n')* !.
+
+# There is one entry per line, with the following format:
+# group_name:password:GID:user_list
+entry <- group_name ':' password ':' GID ':' user_list
+
+# group_name  the name of the group.
+group_name <- (![:\n].)+
+
+# password    the (encrypted) group password.  If this field is empty, no password is needed.
+password <- _shadow &':' / _null / _encrypted_password
+_encrypted_password <- (![:\n].)+
+_null <- &':'
+_shadow <- 'x'
+
+# GID         the numeric group ID.
+GID <- [0-9]+
+
+# user_list   a list of the usernames that are members of this group, separated by commas.
+user_list <- (_user (',' _user)*)?
+_user <- [a-z0-9._\-]+
