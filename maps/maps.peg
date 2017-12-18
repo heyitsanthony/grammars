@@ -1,0 +1,37 @@
+# Adapted from the Linux kernel's Documentation/filesystems/proc.txt
+package maps
+
+type Grammar Peg {}
+
+# The /proc/PID/maps file containing the currently mapped memory regions and
+# their access permissions.
+maps <- (mapping '\n')* !.
+
+mapping <- address ' ' perms  ' ' offset ' ' dev ' ' inode [\t ]+ pathname?
+
+# "address" is the address space in the process that it occupies
+address <- _hex+ '-' _hex+
+_hex <- [0-9a-f]
+
+# "perms" is a set of permissions
+perms <- [r\-][w\-][x\-][p\-]
+
+# "offset" is the offset into the mapping
+offset <- _hex+
+
+# "dev" is the device (major:minor)
+dev <- major ':' minor
+major <- _hex _hex
+minor <- _hex _hex
+
+# "inode" is the inode on that device. 0 indicates that  no inode is associated
+# with the memory region, as the case would be with BSS (uninitialized data).
+inode <- [0-9]+
+
+# The "pathname" shows the name associated file for this mapping.
+pathname <- heap/stack/vdso/vsyscall/file
+heap <- '[heap]'
+stack <- '[stack]'
+vdso <- '[vdso]'
+vsyscall <- '[vsyscall]'
+file <- !' ' (![\n].)*
