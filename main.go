@@ -1,9 +1,10 @@
-//go:generate peg crontab/crontab.peg
-//go:generate peg golang/golang.peg
-//go:generate peg offside/offside.peg
-//go:generate peg peg/peg.peg
-//go:generate peg peg1/peg1.peg
-//go:generate peg popl04/F1.peg
+//go:generate peg -strict crontab/crontab.peg
+//go:generate peg -strict golang/golang.peg
+//go:generate peg -strict offside/offside.peg
+//go:generate peg -strict passwd/passwd.peg
+//go:generate peg -strict peg/peg.peg
+//go:generate peg -strict peg1/peg1.peg
+//go:generate peg -strict popl04/F1.peg
 //go:generate peg rfc1459/rfc1459.peg
 //go:generate peg rfc2812/rfc2812.peg
 
@@ -18,6 +19,7 @@ import (
 	"github.com/heyitsanthony/grammars/crontab"
 	"github.com/heyitsanthony/grammars/golang"
 	"github.com/heyitsanthony/grammars/offside"
+	"github.com/heyitsanthony/grammars/passwd"
 	"github.com/heyitsanthony/grammars/peg"
 	"github.com/heyitsanthony/grammars/peg1"
 	"github.com/heyitsanthony/grammars/popl04"
@@ -39,6 +41,7 @@ type g interface {
 func newCrontab(s string) g { return &crontab.Grammar{Buffer: s, Pretty: true} }
 func newGo(s string) g      { return &golang.Grammar{Buffer: s, Pretty: true} }
 func newOffside(s string) g { return &offside.Grammar{Buffer: s, Pretty: true} }
+func newPasswd(s string) g  { return &passwd.Grammar{Buffer: s, Pretty: true} }
 func newPeg(s string) g     { return &peg.Grammar{Buffer: s, Pretty: true} }
 func newPeg1(s string) g    { return &peg1.Grammar{Buffer: s, Pretty: true} }
 func newPopl04(s string) g  { return &popl04.Grammar{Buffer: s, Pretty: true} }
@@ -49,6 +52,7 @@ var grammars = map[string](func(string) g){
 	"crontab": newCrontab,
 	"go":      newGo,
 	"offside": newOffside,
+	"passwd":  newPasswd,
 	"peg":     newPeg,
 	"peg1":    newPeg1,
 	"popl04":  newPopl04,

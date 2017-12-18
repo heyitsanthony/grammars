@@ -1,0 +1,56 @@
+# Adapted from the Linux Programmer's Manual passwd(5) manpage
+
+package passwd
+
+type Grammar Peg {}
+
+# passwd - password file
+# The /etc/passwd file is a text file that describes user login accounts for the system.  It should have read permission allowed for all users (many utilities, like ls(1) use it to map user IDs to usernames), but write access only for the superuser.
+passwd <- (line ('\n'/!.))*
+
+# Each line of the file describes a single user, and contains seven colon-separated fields:
+# 	name:password:UID:GID:GECOS:directory:shell
+line <- name ':' password ':' UID ':' GID ':' GECOS ':' directory ':' shell
+
+# name        This is the user's login name.  It should not contain capital letters.
+#
+# POSIX 3.431 User Name
+# To be portable across systems conforming to POSIX.1-2008, the value is composed of characters from the portable filename character set. The <hyphen> character should not be used as the first character of a portable user name.
+# POSIX 3.278 Portable Filename Character Set
+# [A-Za-z0-9._\-]
+name <- !'-' ([a-z0-9._\-])+
+
+# password    This is either the encrypted user password, an asterisk (*), or the letter 'x'.  (See pwconv(8) for an explanation of 'x'.)
+password <- ((_noauth / _shadow) &':') / (_encrypted &':')
+
+# These days many people run some version of the shadow password suite, where /etc/passwd has an 'x' character in the password field, and the encrypted passwords are in /etc/shadow, which is readable by the superuser only.
+_shadow <- 'x'
+
+# In  the  good  old  days  there was no great problem with this general read permission.  Everybody could read the encrypted passwords, but the hardware was too slow to crack a well-chosen password, and moreover the basic assumption used to be that of a friendly user-community.
+_encrypted <-  _nisplus / (!':\n' .)+ / _null
+
+# If the encrypted password, whether in /etc/passwd or in /etc/shadow, is an empty string, login is allowed without even asking for a password.  Note that this functionality may be intentionally disabled in applications,  or  configurable  (for  example  using  the  "nullok"  or
+# "nonull" arguments to pam_unix.so).
+_null <- &':'
+
+# If the encrypted password in /etc/passwd is "*NP*" (without the quotes), the shadow record should be obtained from an NIS+ server.
+_nisplus <- '*NP*'
+
+# Regardless of whether shadow passwords are used, many system administrators use an asterisk (*) in the encrypted password field to make sure that this user can not authenticate him- or herself using a password.  (But see NOTES below.)
+# If you create a new login, first put an asterisk (*) in the password field, then use passwd(1) to set it.
+_noauth <- '*'
+
+# UID         The privileged root login account (superuser) has the user ID 0.
+UID <- [0-9]+
+
+# GID         This is the numeric primary group ID for this user.  (Additional groups for the user are defined in the system group file; see group(5)).
+GID <- [0-9]+
+
+# GECOS       This field (sometimes called the "comment field") is optional and used only for informational purposes.  Usually, it contains the full username.  Some programs (for example, finger(1)) display information from this field.
+GECOS <- (![:\n] .)*
+
+# directory   This is the user's home directory: the initial directory where the user is placed after logging in.  The value in this field is used to set the HOME environment variable.
+directory <- (![:\n] .)*
+
+# shell       This is the program to run at login (if empty, use /bin/sh).  If set to a nonexistent executable, the user will be unable to login through login(1).  The value in this field is used to set the SHELL environment variable.
+shell <- (!'\n' .)*
