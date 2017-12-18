@@ -2,6 +2,7 @@
 //go:generate peg -strict diskstats/diskstats.peg
 //go:generate peg -strict golang/golang.peg
 //go:generate peg -strict group/group.peg
+//go:generate peg -strict gshadow/gshadow.peg
 //go:generate peg -strict offside/offside.peg
 //go:generate peg -strict passwd/passwd.peg
 //go:generate peg -strict peg/peg.peg
@@ -23,6 +24,7 @@ import (
 	"github.com/heyitsanthony/grammars/diskstats"
 	"github.com/heyitsanthony/grammars/golang"
 	"github.com/heyitsanthony/grammars/group"
+	"github.com/heyitsanthony/grammars/gshadow"
 	"github.com/heyitsanthony/grammars/offside"
 	"github.com/heyitsanthony/grammars/passwd"
 	"github.com/heyitsanthony/grammars/peg"
@@ -48,6 +50,7 @@ func newCrontab(s string) g   { return &crontab.Grammar{Buffer: s, Pretty: true}
 func newDiskstats(s string) g { return &diskstats.Grammar{Buffer: s, Pretty: true} }
 func newGo(s string) g        { return &golang.Grammar{Buffer: s, Pretty: true} }
 func newGroup(s string) g     { return &group.Grammar{Buffer: s, Pretty: true} }
+func newGShadow(s string) g   { return &gshadow.Grammar{Buffer: s, Pretty: true} }
 func newOffside(s string) g   { return &offside.Grammar{Buffer: s, Pretty: true} }
 func newPasswd(s string) g    { return &passwd.Grammar{Buffer: s, Pretty: true} }
 func newPeg(s string) g       { return &peg.Grammar{Buffer: s, Pretty: true} }
@@ -62,6 +65,7 @@ var grammars = map[string](func(string) g){
 	"diskstats": newDiskstats,
 	"go":        newGo,
 	"group":     newGroup,
+	"gshadow":   newGShadow,
 	"offside":   newOffside,
 	"passwd":    newPasswd,
 	"peg":       newPeg,

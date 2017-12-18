@@ -1,0 +1,57 @@
+# Adapted from the "File Formats and Conversions" gshadow(5) manpage.
+# gshadow - shadowed group file
+package gshadow
+
+type Grammar Peg {}
+
+# /etc/gshadow contains the shadowed information for group accounts.
+gshadow <- (line '\n')* !.
+
+# Each line of this file contains the following colon-separated fields:
+line <- group_name ':'
+	encrypted_password ':'
+	administrators ':'
+	members
+
+# group name
+# It must be a valid group name, which exist on the system.
+group_name <- (![:\n].)+
+
+# encrypted password
+# Refer to crypt(3) for details on how this string is interpreted.
+#
+# From crypt(3)
+#
+# If the password field contains some string that is not a valid result of crypt(3), for instance ! or *, users will not be able to
+# use a unix password to access the group (but group members do not need the password).
+#
+# The password is used when an user who is not a member of the group wants to gain the permissions of this group (see newgrp(1)).
+#
+# This field may be empty, in which case only the group members can gain the group permissions.
+#
+# A password field which starts with a exclamation mark means that the password is locked. The remaining characters on the line
+# represent the password field before the password was locked.
+#
+# This password supersedes any password specified in /etc/group.
+encrypted_password <- _crypt3 / _noauth / _onlymembers
+_crypt3 <- '$' _id '$' _salt '$' _encrypted
+_id <- _md5/_blowfish/_sha256/_sha512
+_md5 <- '1'
+_blowfish <- '2a'
+_sha256 <- '5'
+_sha512 <- '6'
+# TODO: precisely match salt with expected number of characters
+_salt <- [a-zA-Z0-9./]+
+_encrypted <- [a-zA-Z0-9./]+
+
+_noauth <- (![:\n].)+
+_onlymembers <- &':'
+
+# administrators
+# It must be a comma-separated list of user names.
+administrators <- (_user (',' _user)*)?
+_user <- [a-z0-9._\-]+
+
+# members
+# It must be a comma-separated list of user names.
+members <-  (_user (',' _user)*)?
