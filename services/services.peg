@@ -1,0 +1,19 @@
+# Adapted from Linux Programmer's Manual services(5)
+package services
+
+type Grammar Peg {}
+
+# services - Internet network services list /etc/services
+services <- (((comment/line) '\n')/'\n')* !.
+
+line <- service_name [ \t]+ port '/' protocol ([ \t]+ aliases)? [ \t]* comment?
+
+service_name <- _item
+port <- [0-9]+
+protocol <- _item
+aliases <- alias ([ \t]+ alias)*
+alias <- _item
+
+_item <- (![ \t\n#].)+
+
+comment <- '#' (!'\n' .)*
