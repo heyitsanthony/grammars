@@ -12,6 +12,7 @@
 //go:generate peg -strict popl04/F1.peg
 //go:generate peg rfc1459/rfc1459.peg
 //go:generate peg rfc2812/rfc2812.peg
+//go:generate peg -strict rpc/rpc.peg
 //go:generate peg -strict shadow/shadow.peg
 
 package main
@@ -37,6 +38,7 @@ import (
 	"github.com/heyitsanthony/grammars/popl04"
 	"github.com/heyitsanthony/grammars/rfc1459"
 	"github.com/heyitsanthony/grammars/rfc2812"
+	"github.com/heyitsanthony/grammars/rpc"
 	"github.com/heyitsanthony/grammars/shadow"
 )
 
@@ -66,6 +68,7 @@ func newPeg1(s string) g      { return &peg1.Grammar{Buffer: s, Pretty: true} }
 func newPopl04(s string) g    { return &popl04.Grammar{Buffer: s, Pretty: true} }
 func newRFC1459(s string) g   { return &rfc1459.Grammar{Buffer: s, Pretty: true} }
 func newRFC2812(s string) g   { return &rfc2812.Grammar{Buffer: s, Pretty: true} }
+func newRPC(s string) g       { return &rpc.Grammar{Buffer: s, Pretty: true} }
 func newShadow(s string) g    { return &shadow.Grammar{Buffer: s, Pretty: true} }
 
 var grammars = map[string](func(string) g){
@@ -83,6 +86,7 @@ var grammars = map[string](func(string) g){
 	"popl04":    newPopl04,
 	"rfc1459":   newRFC1459,
 	"rfc2812":   newRFC2812,
+	"rpc":       newRPC,
 	"shadow":    newShadow,
 }
 

@@ -1,0 +1,24 @@
+# Adapted from Linux Programmer's Manual rpc(5)
+
+package rpc
+
+type Grammar Peg {}
+
+# The rpc file /etc/rpc contains user readable names that can be used in place of RPC program numbers.
+rpc <- (((comment/line) '\n')/'\n')* !.
+
+# A '#' indicates the beginning of a comment; characters from the '#' to the end of the line are not interpreted by routines which search the file.
+comment <- '#' (!'\n' .)*
+
+# Each line has the following information:
+line <- name [ \t]+ program_number ([ \t]+ aliases)? [ \t]* comment?
+
+# name of server for the RPC program
+name <- [0-9_A-Za-z\-.]+
+
+# RPC program number
+program_number <- [0-9]+
+
+# aliases
+aliases <- alias ([ \t]+ alias)*
+alias <- [0-9_A-Za-z\-.]+
