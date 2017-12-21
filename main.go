@@ -1,5 +1,6 @@
 //go:generate peg -strict crontab/crontab.peg
 //go:generate peg -strict diskstats/diskstats.peg
+//go:generate peg -strict fstab/fstab.peg
 //go:generate peg -strict golang/golang.peg
 //go:generate peg -strict group/group.peg
 //go:generate peg -strict gshadow/gshadow.peg
@@ -23,6 +24,7 @@ import (
 
 	"github.com/heyitsanthony/grammars/crontab"
 	"github.com/heyitsanthony/grammars/diskstats"
+	"github.com/heyitsanthony/grammars/fstab"
 	"github.com/heyitsanthony/grammars/golang"
 	"github.com/heyitsanthony/grammars/group"
 	"github.com/heyitsanthony/grammars/gshadow"
@@ -50,6 +52,7 @@ type g interface {
 
 func newCrontab(s string) g   { return &crontab.Grammar{Buffer: s, Pretty: true} }
 func newDiskstats(s string) g { return &diskstats.Grammar{Buffer: s, Pretty: true} }
+func newFstab(s string) g     { return &fstab.Grammar{Buffer: s, Pretty: true} }
 func newGo(s string) g        { return &golang.Grammar{Buffer: s, Pretty: true} }
 func newGroup(s string) g     { return &group.Grammar{Buffer: s, Pretty: true} }
 func newGShadow(s string) g   { return &gshadow.Grammar{Buffer: s, Pretty: true} }
@@ -66,6 +69,7 @@ func newShadow(s string) g    { return &shadow.Grammar{Buffer: s, Pretty: true} 
 var grammars = map[string](func(string) g){
 	"crontab":   newCrontab,
 	"diskstats": newDiskstats,
+	"fstab":     newFstab,
 	"go":        newGo,
 	"group":     newGroup,
 	"gshadow":   newGShadow,

@@ -1,0 +1,52 @@
+# Adapted from util-linux fstab(5)
+# fstab - static information about the filesystems
+package fstab
+
+type Grammar Peg {}
+
+# Each filesystem is described on a separate line.
+# Blank lines are ignored.
+fstab <- (((comment / entry) '\n') / '\n')* !.
+
+# Lines starting with '#' are comments.
+comment <- '#' (!'\n' .)*
+
+# Fields on each line are separated by tabs or spaces.
+_sep <- [ \t]
+
+entry <-	fs_spec _sep+
+		fs_file _sep+
+		fs_vfstype _sep+
+		fs_mntops
+		(_sep+ (fs_freq _sep+ fs_passno?))?
+		_sep*
+
+# the block special device or remote filesystem to be mounted.
+fs_spec <-	('PART'? _label / _uuid ) /
+		_mount_ordinary /
+		_mount_nfs /
+		_mount_nostorage
+_label <- 'LABEL=' (!_sep .)*
+# Note that mount(8) uses UUIDs as strings. The string representation of the UUID should be based on lower case characters.
+_uuid <- 'UUID=' [0-9a-f\-]*
+# For ordinary  mounts, it will hold (a link to) a block special device node
+_mount_nfs <- _host ':' _dir
+_host <- [a-zA-Z0-9.]+
+_dir <- '/'(!_sep .)*
+_mount_ordinary <- _dir
+_mount_nostorage <- (![ \t].)*
+
+# The mount point for the filesystem.  For swap partitions, this field should  be
+# specified as `none'. If the name of the mount point contains spaces these can be escaped as `\040'.
+fs_file <- _dir / 'none' / 'swap'
+
+# The type of the filesystem.
+fs_vfstype <- (!_sep .)*
+
+# The mount options associated with the filesystem
+fs_mntops <- _op (',' _op)*
+# TODO: parse for filesystem-(in)?dependent options?
+_op <- (![ \t,] .)+
+
+fs_freq <- [0-9]+
+fs_passno <- [0-9]+
