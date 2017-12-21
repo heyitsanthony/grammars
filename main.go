@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -41,6 +42,7 @@ import (
 
 var (
 	astFlag = flag.Bool("ast", true, "display AST")
+	all     = flag.Bool("all", false, "apply all matching grammars")
 	grammar = flag.String("grammar", "", "parse with grammar")
 )
 
@@ -84,17 +86,6 @@ var grammars = map[string](func(string) g){
 	"shadow":    newShadow,
 }
 
-func do(g g) error {
-	g.Init()
-	if err := g.Parse(); err != nil {
-		return err
-	}
-	if *astFlag {
-		g.PrintSyntaxTree()
-	}
-	return nil
-}
-
 func main() {
 	flag.Parse()
 	buffer, err := ioutil.ReadAll(os.Stdin)
@@ -103,23 +94,37 @@ func main() {
 	}
 	s := string(buffer)
 	var errs []error
-	apply := func(f func(string) g) {
-		if err := do(f(s)); err == nil {
-			os.Exit(0)
-		} else {
+	apply := func(l string, f func(string) g) {
+		g := f(s)
+		g.Init()
+		if err := g.Parse(); err != nil {
 			errs = append(errs, err)
+			return
+		}
+		if *astFlag {
+			g.PrintSyntaxTree()
+		} else {
+			fmt.Println(l)
+		}
+		if !*all {
+			os.Exit(0)
 		}
 	}
 	if *grammar != "" {
 		if f, ok := grammars[*grammar]; ok {
-			apply(f)
+			apply(*grammar, f)
 		} else {
 			log.Fatalf("unknown grammar %q", *grammar)
 		}
+		if len(errs) != 0 {
+			log.Fatal(errs)
+		}
 	} else {
-		for _, f := range grammars {
-			apply(f)
+		for l, f := range grammars {
+			apply(l, f)
+		}
+		if len(errs) == len(grammars) {
+			log.Fatal(errs)
 		}
 	}
-	log.Fatal(errs)
 }
